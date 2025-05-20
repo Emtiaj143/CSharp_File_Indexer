@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.IO.Pipes;
+using System.Text;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -9,22 +11,17 @@ namespace ScannerB
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("ScannerB - Directory Reader and Word Counter");
             string directoryPath = "C:\\CSharp_File_Indexer\\ScannerB_Files";
+            var wordCounts = new Dictionary<string, int>();
 
             if (Directory.Exists(directoryPath))
             {
-                var wordCounts = new Dictionary<string, int>();
-
                 var files = Directory.GetFiles(directoryPath, "*.txt");
                 foreach (var file in files)
                 {
-                    Console.WriteLine($"Reading file: {Path.GetFileName(file)}");
-
                     string[] words = File.ReadAllText(file)
-                                         .ToLower()
-                                         .Split(new char[] { ' ', '\t', '\n', '\r', '.', ',', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
-
+                        .ToLower()
+                        .Split(new char[] { ' ', '\t', '\n', '\r', '.', ',', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
                     foreach (var word in words)
                     {
                         if (wordCounts.ContainsKey(word))
@@ -33,20 +30,22 @@ namespace ScannerB
                             wordCounts[word] = 1;
                     }
                 }
+            }
 
-                // Print the word counts for testing
-                Console.WriteLine("\nWord Counts:");
-                foreach (var entry in wordCounts.OrderBy(e => e.Key))
+            // Convert dictionary to string format
+            string payload = string.Join("\n", wordCounts.Select(kvp => $"{kvp.Key}:{kvp.Value}"));
+
+            using (var pipeClient = new NamedPipeClientStream(".", "pipeB", PipeDirection.Out))
+            {
+                pipeClient.Connect();
+                using (var writer = new StreamWriter(pipeClient))
                 {
-                    Console.WriteLine($"{entry.Key}: {entry.Value}");
+                    writer.AutoFlush = true;
+                    writer.WriteLine(payload);
                 }
             }
-            else
-            {
-                Console.WriteLine($"Directory not found: {directoryPath}");
-            }
 
-            Console.WriteLine("\nPress any key to exit...");
+            Console.WriteLine("ScannerB: Sent data to master.");
             Console.ReadKey();
         }
     }
