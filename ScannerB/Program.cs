@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.Text;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace ScannerB
 {
@@ -11,17 +12,36 @@ namespace ScannerB
     {
         static void Main(string[] args)
         {
+            Console.WriteLine("ScannerB: Starting threaded scanning...");
+
+            Thread scanThread = new Thread(ProcessDirectory);
+            scanThread.Start();
+            scanThread.Join();
+
+            Console.WriteLine("ScannerB: Completed.");
+            Console.ReadKey();
+        }
+
+        static void ProcessDirectory()
+        {
+            Console.WriteLine("ScannerB: Entered ProcessDirectory.");
+
             string directoryPath = "C:\\CSharp_File_Indexer\\ScannerB_Files";
             var wordCounts = new Dictionary<string, int>();
 
             if (Directory.Exists(directoryPath))
             {
+                Console.WriteLine("ScannerB: Directory exists. Reading files...");
                 var files = Directory.GetFiles(directoryPath, "*.txt");
+
                 foreach (var file in files)
                 {
+                    Console.WriteLine($"ScannerB: Reading file: {Path.GetFileName(file)}");
+
                     string[] words = File.ReadAllText(file)
                         .ToLower()
                         .Split(new char[] { ' ', '\t', '\n', '\r', '.', ',', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
+
                     foreach (var word in words)
                     {
                         if (wordCounts.ContainsKey(word))
@@ -31,13 +51,19 @@ namespace ScannerB
                     }
                 }
             }
+            else
+            {
+                Console.WriteLine($"ScannerB: Directory not found: {directoryPath}");
+                return;
+            }
 
-            // Convert dictionary to string format
+            Console.WriteLine("ScannerB: Finished counting words. Preparing to send...");
+
             string payload = string.Join("\n", wordCounts.Select(kvp => $"{kvp.Key}:{kvp.Value}"));
 
             using (var pipeClient = new NamedPipeClientStream(".", "pipeB", PipeDirection.Out))
             {
-                pipeClient.Connect();
+                pipeClient.Connect(); // could block if Master not listening
                 using (var writer = new StreamWriter(pipeClient))
                 {
                     writer.AutoFlush = true;
@@ -50,3 +76,4 @@ namespace ScannerB
         }
     }
 }
+
