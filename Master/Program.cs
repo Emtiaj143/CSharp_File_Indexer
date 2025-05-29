@@ -6,6 +6,9 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
 
 
 namespace Master
@@ -16,6 +19,7 @@ namespace Master
 
         static void Main(string[] args)
         {
+            SetProcessorAffinity(2); // Core 2
             Console.WriteLine("Master - Starting named pipe servers...");
 
             Thread agentAThread = new Thread(() => ListenOnPipe("pipeA"));
@@ -60,5 +64,13 @@ namespace Master
                 }
             }
         }
+        static void SetProcessorAffinity(int core)
+        {
+            Process process = Process.GetCurrentProcess();
+            IntPtr mask = new IntPtr(1 << core);
+            process.ProcessorAffinity = mask;
+            Console.WriteLine($"Set processor affinity to core {core}.");
+        }
+
     }
 }

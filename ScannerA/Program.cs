@@ -5,13 +5,18 @@ using System.Text;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
 
 namespace ScannerA
 {
     class Program
     {
+
         static void Main(string[] args)
         {
+            SetProcessorAffinity(0); // Core 0
             Console.WriteLine("ScannerA: Starting threaded scanning...");
 
             Thread scanThread = new Thread(ProcessDirectory);
@@ -74,6 +79,14 @@ namespace ScannerA
             Console.WriteLine("ScannerA: Sent data to master.");
             Console.ReadKey();
         }
+        static void SetProcessorAffinity(int core)
+        {
+            Process process = Process.GetCurrentProcess();
+            IntPtr mask = new IntPtr(1 << core);
+            process.ProcessorAffinity = mask;
+            Console.WriteLine($"Set processor affinity to core {core}.");
+        }
+
     }
 }
 
