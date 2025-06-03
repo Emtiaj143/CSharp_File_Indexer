@@ -19,50 +19,81 @@ namespace Master
 
         static void Main(string[] args)
         {
-            SetProcessorAffinity(2); // Core 2
-            Console.WriteLine("Master - Starting named pipe servers...");
-
-            Thread agentAThread = new Thread(() => ListenOnPipe("pipeA"));
-            Thread agentBThread = new Thread(() => ListenOnPipe("pipeB"));
-            agentAThread.IsBackground = true;
-            agentBThread.IsBackground = true;
-
-            agentAThread.Start();
-            agentBThread.Start();
-
-            
-
-            Console.WriteLine("\nMaster: Combined Word Counts:");
-            foreach (var entry in totalWordCounts.OrderBy(e => e.Key))
+            try
             {
-                Console.WriteLine($"{entry.Key}: {entry.Value}");
+                SetProcessorAffinity(2);
+                Log("Master started.");
+
+                Console.WriteLine("Master - Starting named pipe servers...");
+                Thread agentAThread = new Thread(() => ListenOnPipe("pipeA"));
+                Thread agentBThread = new Thread(() => ListenOnPipe("pipeB"));
+                agentAThread.IsBackground = true;
+                agentBThread.IsBackground = true;
+
+                agentAThread.Start();
+                agentBThread.Start();
+
+                agentAThread.Join();
+                agentBThread.Join();
+
+                Console.WriteLine("\nMaster: Combined Word Counts:");
+                foreach (var entry in totalWordCounts.OrderBy(e => e.Key))
+                {
+                    Console.WriteLine($"{entry.Key}: {entry.Value}");
+                }
+
+                Log("Master processing completed.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+                Log("Fatal error in Master Main: " + ex.ToString());
             }
 
-            Console.WriteLine("\nMaster: Finished processing.");
+            Console.WriteLine("Press any key to exit...");
             Console.ReadKey();
+            Log("Master exited.");
         }
 
         static void ListenOnPipe(string pipeName)
         {
-            using (var pipeServer = new NamedPipeServerStream(pipeName, PipeDirection.In))
+            try
             {
-                Console.WriteLine($"Master: Waiting for connection on {pipeName}...");
-                pipeServer.WaitForConnection();
-                using (var reader = new StreamReader(pipeServer))
+                using (var pipeServer = new NamedPipeServerStream(pipeName, PipeDirection.In))
                 {
-                    string data = reader.ReadToEnd();
-                    Console.WriteLine($"\nData received on {pipeName}:\n{data}");
+                    Log($"Master: Waiting for connection on {pipeName}...");
+                    Console.WriteLine($"Master: Waiting for connection on {pipeName}...");
+                    pipeServer.WaitForConnection();
 
-                    foreach (var line in data.Split('\n'))
+                    using (var reader = new StreamReader(pipeServer))
                     {
-                        var parts = line.Split(':');
-                        if (parts.Length == 2 && int.TryParse(parts[1], out int count))
+                        string data = reader.ReadToEnd();
+                        Log($"Data received on {pipeName}:\n{data}");
+                        Console.WriteLine($"\nData received on {pipeName}:\n{data}");
+
+                        foreach (var line in data.Split('\n'))
                         {
-                            totalWordCounts.AddOrUpdate(parts[0], count, (_, existing) => existing + count);
+                            var parts = line.Split(':');
+                            if (parts.Length == 2 && int.TryParse(parts[1], out int count))
+                            {
+                                totalWordCounts.AddOrUpdate(parts[0], count, (_, existing) => existing + count);
+                            }
                         }
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+                Log($"Error in ListenOnPipe({pipeName}): " + ex.ToString());
+            }
+        }
+
+        static void Log(string message)
+        {
+            string logFile = "Logs/log.txt";
+            Directory.CreateDirectory("Logs");
+            File.AppendAllText(logFile, $"{DateTime.Now}: {message}\n");
         }
         static void SetProcessorAffinity(int core)
         {
@@ -71,6 +102,7 @@ namespace Master
             process.ProcessorAffinity = mask;
             Console.WriteLine($"Set processor affinity to core {core}.");
         }
+
 
     }
 }

@@ -16,68 +16,95 @@ namespace ScannerA
 
         static void Main(string[] args)
         {
-            SetProcessorAffinity(0); // Core 0
-            Console.WriteLine("ScannerA: Starting threaded scanning...");
+            try
+            {
+                SetProcessorAffinity(0);
+                Log("Scanner started.");
 
-            Thread scanThread = new Thread(ProcessDirectory);
-            scanThread.Start();
-            scanThread.Join();
+                Console.WriteLine("Starting threaded scanning...");
+                Thread scanThread = new Thread(ProcessDirectory);
+                scanThread.Start();
+                scanThread.Join();
 
-            Console.WriteLine("ScannerA: Completed.");
+                Log("Scanning completed.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+                Log("Fatal error in Main: " + ex.ToString());
+            }
+
+            Console.WriteLine("Press any key to exit...");
             Console.ReadKey();
+            Log("Scanner exited.");
         }
+
 
         static void ProcessDirectory()
         {
-            Console.WriteLine("ScannerA: Entered ProcessDirectory.");
-
-            string directoryPath = "C:\\CSharp_File_Indexer\\ScannerA_Files";
-            var wordCounts = new Dictionary<string, int>();
-
-            if (Directory.Exists(directoryPath))
+            try
             {
-                Console.WriteLine("ScannerA: Directory exists. Reading files...");
-                var files = Directory.GetFiles(directoryPath, "*.txt");
+                Log("Entered ProcessDirectory.");
 
-                foreach (var file in files)
+                string directoryPath = "C:\\CSharp_File_Indexer\\ScannerA_Files";
+                var wordCounts = new Dictionary<string, int>();
+
+                if (Directory.Exists(directoryPath))
                 {
-                    Console.WriteLine($"ScannerA: Reading file: {Path.GetFileName(file)}");
+                    Log("Directory exists: " + directoryPath);
+                    var files = Directory.GetFiles(directoryPath, "*.txt");
 
-                    string[] words = File.ReadAllText(file)
-                        .ToLower()
-                        .Split(new char[] { ' ', '\t', '\n', '\r', '.', ',', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
-
-                    foreach (var word in words)
+                    foreach (var file in files)
                     {
-                        if (wordCounts.ContainsKey(word))
-                            wordCounts[word]++;
-                        else
-                            wordCounts[word] = 1;
+                        Log("Reading file: " + file);
+                        string[] words = File.ReadAllText(file)
+                            .ToLower()
+                            .Split(new char[] { ' ', '\t', '\n', '\r', '.', ',', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
+
+                        foreach (var word in words)
+                        {
+                            if (wordCounts.ContainsKey(word))
+                                wordCounts[word]++;
+                            else
+                                wordCounts[word] = 1;
+                        }
                     }
                 }
-            }
-            else
-            {
-                Console.WriteLine($"ScannerA: Directory not found: {directoryPath}");
-                return;
-            }
-
-            Console.WriteLine("ScannerA: Finished counting words. Preparing to send...");
-
-            string payload = string.Join("\n", wordCounts.Select(kvp => $"{kvp.Key}:{kvp.Value}"));
-
-            using (var pipeClient = new NamedPipeClientStream(".", "pipeA", PipeDirection.Out))
-            {
-                pipeClient.Connect(); 
-                using (var writer = new StreamWriter(pipeClient))
+                else
                 {
-                    writer.AutoFlush = true;
-                    writer.WriteLine(payload);
+                    Log("Directory not found: " + directoryPath);
+                    Console.WriteLine("Directory not found.");
+                    return;
                 }
-            }
 
-            Console.WriteLine("ScannerA: Sent data to master.");
-            Console.ReadKey();
+                Log("Finished counting. Preparing to send.");
+
+                string payload = string.Join("\n", wordCounts.Select(kvp => $"{kvp.Key}:{kvp.Value}"));
+
+                using (var pipeClient = new NamedPipeClientStream(".", "pipeA", PipeDirection.Out))
+                {
+                    pipeClient.Connect(5000);
+                    using (var writer = new StreamWriter(pipeClient))
+                    {
+                        writer.AutoFlush = true;
+                        writer.WriteLine(payload);
+                    }
+                }
+
+                Log("Data sent to master.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+                Log("Error in ProcessDirectory: " + ex.ToString());
+            }
+        }
+
+        static void Log(string message)
+        {
+            string logFile = "Logs/log.txt";
+            Directory.CreateDirectory("Logs");
+            File.AppendAllText(logFile, $"{DateTime.Now}: {message}\n");
         }
         static void SetProcessorAffinity(int core)
         {
